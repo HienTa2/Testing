@@ -216,8 +216,4 @@ print("settings.ini exists:", os.path.exists("settings.ini"))
 from nbdev.doclinks import nbdev_export
 nbdev_export()
 
-import os
-print("Files in current directory:", os.listdir())
-
-
 
