@@ -11,6 +11,10 @@
 #     language: python
 #     name: dsproject
 # ---
+import gradio as gr
+
+demo.launch()
+
 
 # +
 #|export
