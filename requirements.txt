@@ -1,3 +1,4 @@
 fastai
 gradio
 ipywidgets
+duckduckgo-search
