@@ -165,7 +165,7 @@ intf = gr.Interface(
         ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/dogs/dogs_0.jpg'],
         ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/cats/cats_1.jpg'],
         ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/cats/cats_10.jpg'],
-        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/dogs/dogs_10.jpg'],
+        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/dogs/dogs_10.jpg']
     ]
 )
 
