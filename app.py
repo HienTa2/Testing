@@ -1,35 +1,28 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: Python (DSproject)
-#     language: python
-#     name: dsproject
-# ---
-
-# +
-#|export
+# =============================
+# IMPORTS
+# =============================
 import sys
 import shutil
+import os
+import urllib.request
+from pathlib import Path
 from fastai.vision.all import *
 from fastdownload import download_url
 from fastai.vision.widgets import ImageClassifierCleaner
 from duckduckgo_search import DDGS
-from pathlib import Path
-import urllib.request
+import gradio as gr
 
-# Ensure correct package path
+# Ensure correct package path (if needed)
 sys.path.append(r"C:\Users\Admin\PycharmProjects\PythonProject\Claims_Parsing\.venv\Lib\site-packages")
+
+# =============================
+# IMAGE DATA COLLECTION
+# =============================
 
 # Set base path for storing images
 path = Path('PETS_images')
 
-# Remove everything and start fresh
+# Remove previous dataset and start fresh
 if path.exists():
     shutil.rmtree(path)
 
@@ -42,16 +35,15 @@ def search_images_duckduckgo(query, max_images=20):
     with DDGS() as ddgs:
         return [r["image"] for r in ddgs.images(query, max_results=max_images)]
 
-# Loop through each category and download images
+# Download images for each category
 for category in categories:
     dest = path/category
     dest.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"Searching images for: {category}")
     urls = search_images_duckduckgo(f'{category} pets', max_images=20)
-    
-    print(f"Found {len(urls)} images. Downloading now...")
-    
+    print(f"Found {len(urls)} images. Downloading...")
+
     for idx, url in enumerate(urls):
         try:
             image_path = dest/f'{category}_{idx}.jpg'
@@ -60,137 +52,110 @@ for category in categories:
         except Exception as e:
             print(f"Failed to download {url}: {e}")
 
-# Verify images and remove any corrupted ones
+# Remove any corrupted images
 failed = verify_images(get_image_files(path))
 failed.map(Path.unlink)
 
-# Explicitly confirm counts
+# Display counts of downloaded images
 for folder in categories:
     count = len(get_image_files(path/folder))
     print(f"{folder} images:", count)
 
 print("✅ Fastai imported and images processed successfully!")
 
+# =============================
+# DATA BLOCK & MODEL TRAINING
+# =============================
 
-# +
-#|export
-# Define DataBlock & DataLoader
-
+# Define DataBlock for classification
 pets = DataBlock(
     blocks=(ImageBlock, CategoryBlock),
     get_items=get_image_files,
     splitter=RandomSplitter(valid_pct=0.2, seed=42),
     get_y=parent_label,
-    item_tfms=RandomResizedCrop(128, min_scale=0.3)) # RandomResizedCrop gets the same image, but with different size.
-   
-dls = pets.dataloaders(path, bs=8)  # smaller batch size for safety.
+    item_tfms=RandomResizedCrop(128, min_scale=0.3)
+)
+
+# Create DataLoaders
+dls = pets.dataloaders(path, bs=8)  
 dls.train.show_batch(max_n=8, unique=True)
 
-# +
-#|export
-# Train the model and fine tune
+# Train the model
 learn = vision_learner(dls, resnet18, metrics=error_rate)
 learn.fine_tune(5)
-
-# show the images
 learn.show_results()
 
-# +
-#|export
-# show the confusion matrix
+# =============================
+# MODEL INTERPRETATION
+# =============================
 
+# Confusion Matrix
 interp = ClassificationInterpretation.from_learner(learn)
 interp.plot_confusion_matrix()
 
-# +
-#|export
-# top losses
-
+# Show top losses
 interp.plot_top_losses(4, nrows=1)
 
-# +
-#|export
-# Clean wrong label images
-
+# Clean misclassified images
 cleaner = ImageClassifierCleaner(learn)
-cleaner
 
-# +
-#|export
-# get the location of the images in case it needs to be removed.
-
+# List image paths (optional)
 for i in range(len(cleaner.fns)):
     print(f"{i}: {cleaner.fns[i]}")
 
-# +
-#|export
-#for idx in [2]:  # Example: Delete images at indices 0, 5, and 10
-#    os.remove(cleaner.fns[idx])
-#    print(f"Deleted: {cleaner.fns[idx]}")
+# =============================
+# EXPORT & LOAD MODEL
+# =============================
 
-# +
-#|export
-# Exporting the model
-
+# Export trained model
 learn.export('model.pkl')
 
-# +
-#|export
-# load the model to learner
-
+# Load model for inference
 learn = load_learner('model.pkl')
 
-# +
-# Load a single image
-img_path = 'PETS_images/cats/cats_0.jpg'  # Update with an actual image path
-img = PILImage.create(img_path)
+# =============================
+# SINGLE IMAGE PREDICTION
+# =============================
 
 
-learn.predict(img)
-# -
+# Load and predict on a sample image
+#img_path = 'PETS_images/cats/cats_0.jpg'  
+#img = PILImage.create(img_path)
+#pred_class, pred_idx, probs = learn.predict(img)
+#print(f"Prediction: {pred_class}, Probability: {probs[pred_idx]:.4f}")
+###
 
-#|export
-# Make a prediction
-pred_class, pred_idx, probs = learn.predict(img)
-print(f"Prediction: {pred_class}, Probability: {probs[pred_idx]:.4f}")
+# =============================
+# BATCH IMAGE PREDICTION
+# =============================
 
-# +
-#|export
-# Path to single directories
+# Predict all images in a directory
 test_folder = Path('PETS_images/cats')
 
-# Loop through images in the folder
 for img_path in test_folder.iterdir():
     img = PILImage.create(img_path)
     pred_class, pred_idx, probs = learn.predict(img)
     print(f"Image: {img_path.name}, Prediction: {pred_class}, Probability: {probs[pred_idx]:.4f}")
 
-
-# +
-#|export
-# Define the main directory
-pets_path = Path("PETS_images")
-
-# Loop through all images in PETS_images (including cats and dogs)
-for img_path in pets_path.rglob("*.jpg"):  # Adjust extension if needed
-    img = PILImage.create(img_path)  # Load image
-    pred_class, pred_idx, probs = learn.predict(img)  # Predict
-
+# Predict all images in dataset
+for img_path in path.rglob("*.jpg"):
+    img = PILImage.create(img_path)
+    pred_class, pred_idx, probs = learn.predict(img)
     print(f"Image: {img_path}, Prediction: {pred_class}, Probability: {probs[pred_idx]:.4f}")
 
-# +
-#/export
-import gradio as gr
+# =============================
+# DEPLOY AS A WEB APP WITH GRADIO
+# =============================
 
 # Load trained model
-learn = load_learner('model.pkl')  # Ensure this file exists
+learn = load_learner('model.pkl')
 
-# Define the classification function
+# Define classification function for Gradio
 def classify_image(img):
     pred_class, pred_idx, probs = learn.predict(img)
     return {str(pred_class): float(probs[pred_idx])}
 
-# Create Gradio Interface
+# Create Gradio interface
 intf = gr.Interface(
     fn=classify_image,
     inputs=gr.Image(type="pil"),
@@ -198,31 +163,27 @@ intf = gr.Interface(
     allow_flagging="never",
     examples=[
         ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/dogs/dogs_0.jpg'],
-        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/cats/cats_1.jpg']
+        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/cats/cats_1.jpg'],
+        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/cats/cats_10.jpg'],
+        ['https://raw.githubusercontent.com/HienTa2/Testing/main/PETS_images/dogs/dogs_10.jpg'],
     ]
 )
-
-intf.launch(inline=False)
-
 
 # Launch Web App
 intf.launch(inline=False)
 
-# -
+# =============================
+# MISCELLANEOUS
+# =============================
 
+# Access model parameters (optional)
 m = learn.model
-
 ps = list(m.parameters())
+print(ps[1])
 
-ps[1]
-
-# ### Export
-
-import os
+# Check if settings.ini exists
 print("settings.ini exists:", os.path.exists("settings.ini"))
 
-
+# Export using nbdev (if needed)
 from nbdev.doclinks import nbdev_export
 nbdev_export()
-
-
